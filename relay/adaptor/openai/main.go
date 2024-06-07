@@ -4,15 +4,16 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"io"
+	"net/http"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/songquanpeng/one-api/common"
 	"github.com/songquanpeng/one-api/common/conv"
 	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/relay/model"
 	"github.com/songquanpeng/one-api/relay/relaymode"
-	"io"
-	"net/http"
-	"strings"
 )
 
 const (
