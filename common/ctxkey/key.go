@@ -19,5 +19,5 @@ const (
 	TokenName         = "token_name"
 	BaseURL           = "base_url"
 	AvailableModels   = "available_models"
-	ThirdPartyId      = "third_party_id"
+	ThirdPartyId      = "X-Third-Party-Id"
 )
