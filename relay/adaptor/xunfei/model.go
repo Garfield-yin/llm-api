@@ -9,26 +9,28 @@ type Message struct {
 	Content string `json:"content"`
 }
 
+type Functions struct {
+	Text []model.Function `json:"text,omitempty"`
+}
+
 type ChatRequest struct {
 	Header struct {
 		AppId string `json:"app_id"`
 	} `json:"header"`
 	Parameter struct {
 		Chat struct {
-			Domain      string  `json:"domain,omitempty"`
-			Temperature float64 `json:"temperature,omitempty"`
-			TopK        int     `json:"top_k,omitempty"`
-			MaxTokens   int     `json:"max_tokens,omitempty"`
-			Auditing    bool    `json:"auditing,omitempty"`
+			Domain      string   `json:"domain,omitempty"`
+			Temperature *float64 `json:"temperature,omitempty"`
+			TopK        int      `json:"top_k,omitempty"`
+			MaxTokens   int      `json:"max_tokens,omitempty"`
+			Auditing    bool     `json:"auditing,omitempty"`
 		} `json:"chat"`
 	} `json:"parameter"`
 	Payload struct {
 		Message struct {
 			Text []Message `json:"text"`
 		} `json:"message"`
-		Functions struct {
-			Text []model.Function `json:"text,omitempty"`
-		} `json:"functions,omitempty"`
+		Functions *Functions `json:"functions,omitempty"`
 	} `json:"payload"`
 }
 

@@ -55,7 +55,7 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		}
 	}
 
-	modelRatio := billingratio.GetModelRatio(audioModel)
+	modelRatio := billingratio.GetModelRatio(audioModel, channelType)
 	groupRatio := billingratio.GetGroupRatio(group)
 	ratio := modelRatio * groupRatio
 	var quota int64
@@ -111,16 +111,9 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	}()
 
 	// map model name
-	modelMapping := c.GetString(ctxkey.ModelMapping)
-	if modelMapping != "" {
-		modelMap := make(map[string]string)
-		err := json.Unmarshal([]byte(modelMapping), &modelMap)
-		if err != nil {
-			return openai.ErrorWrapper(err, "unmarshal_model_mapping_failed", http.StatusInternalServerError)
-		}
-		if modelMap[audioModel] != "" {
-			audioModel = modelMap[audioModel]
-		}
+	modelMapping := c.GetStringMapString(ctxkey.ModelMapping)
+	if modelMapping != nil && modelMapping[audioModel] != "" {
+		audioModel = modelMapping[audioModel]
 	}
 
 	baseURL := channeltype.ChannelBaseURLs[channelType]

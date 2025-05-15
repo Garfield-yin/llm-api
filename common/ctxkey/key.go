@@ -20,4 +20,6 @@ const (
 	BaseURL           = "base_url"
 	AvailableModels   = "available_models"
 	ThirdPartyId      = "X-Third-Party-Id"
+	KeyRequestBody    = "key_request_body"
+	SystemPrompt      = "system_prompt"
 )

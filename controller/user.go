@@ -3,19 +3,19 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/songquanpeng/one-api/common"
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/common/ctxkey"
-	"github.com/songquanpeng/one-api/common/helper"
-	"github.com/songquanpeng/one-api/common/logger"
-	"github.com/songquanpeng/one-api/common/random"
-	"github.com/songquanpeng/one-api/model"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+
+	"github.com/songquanpeng/one-api/common"
+	"github.com/songquanpeng/one-api/common/config"
+	"github.com/songquanpeng/one-api/common/ctxkey"
+	"github.com/songquanpeng/one-api/common/i18n"
+	"github.com/songquanpeng/one-api/common/random"
+	"github.com/songquanpeng/one-api/model"
 )
 
 type LoginRequest struct {
@@ -35,7 +35,7 @@ func Login(c *gin.Context) {
 	err := json.NewDecoder(c.Request.Body).Decode(&loginRequest)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "无效的参数",
+			"message": i18n.Translate(c, "invalid_parameter"),
 			"success": false,
 		})
 		return
@@ -44,7 +44,7 @@ func Login(c *gin.Context) {
 	password := loginRequest.Password
 	if username == "" || password == "" {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "无效的参数",
+			"message": i18n.Translate(c, "invalid_parameter"),
 			"success": false,
 		})
 		return
@@ -131,14 +131,14 @@ func Register(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "无效的参数",
+			"message": i18n.Translate(c, "invalid_parameter"),
 		})
 		return
 	}
 	if err := common.Validate.Struct(&user); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "输入不合法 " + err.Error(),
+			"message": i18n.Translate(c, "invalid_input"),
 		})
 		return
 	}
@@ -169,35 +169,14 @@ func Register(c *gin.Context) {
 	if config.EmailVerificationEnabled {
 		cleanUser.Email = user.Email
 	}
-	if err := cleanUser.Insert(inviterId); err != nil {
+	if err := cleanUser.Insert(ctx, inviterId); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
 		})
 		return
 	}
-	go func() {
-		err := user.ValidateAndFill()
-		if err != nil {
-			logger.Errorf(ctx, "user.ValidateAndFill failed: %w", err)
-			return
-		}
-		cleanToken := model.Token{
-			UserId:         user.Id,
-			Name:           "default",
-			Key:            random.GenerateKey(),
-			CreatedTime:    helper.GetTimestamp(),
-			AccessedTime:   helper.GetTimestamp(),
-			ExpiredTime:    -1,
-			RemainQuota:    -1,
-			UnlimitedQuota: true,
-		}
-		err = cleanToken.Insert()
-		if err != nil {
-			logger.Errorf(ctx, "cleanToken.Insert failed: %w", err)
-			return
-		}
-	}()
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -386,12 +365,13 @@ func GetSelf(c *gin.Context) {
 }
 
 func UpdateUser(c *gin.Context) {
+	ctx := c.Request.Context()
 	var updatedUser model.User
 	err := json.NewDecoder(c.Request.Body).Decode(&updatedUser)
 	if err != nil || updatedUser.Id == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "无效的参数",
+			"message": i18n.Translate(c, "invalid_parameter"),
 		})
 		return
 	}
@@ -401,7 +381,7 @@ func UpdateUser(c *gin.Context) {
 	if err := common.Validate.Struct(&updatedUser); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "输入不合法 " + err.Error(),
+			"message": i18n.Translate(c, "invalid_input"),
 		})
 		return
 	}
@@ -440,7 +420,7 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 	if originUser.Quota != updatedUser.Quota {
-		model.RecordLog(originUser.Id, model.LogTypeManage, fmt.Sprintf("管理员将用户额度从 %s修改为 %s", common.LogQuota(originUser.Quota), common.LogQuota(updatedUser.Quota)))
+		model.RecordLog(ctx, originUser.Id, model.LogTypeManage, fmt.Sprintf("管理员将用户额度从 %s修改为 %s", common.LogQuota(originUser.Quota), common.LogQuota(updatedUser.Quota)))
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -455,7 +435,7 @@ func UpdateSelf(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "无效的参数",
+			"message": i18n.Translate(c, "invalid_parameter"),
 		})
 		return
 	}
@@ -559,19 +539,20 @@ func DeleteSelf(c *gin.Context) {
 }
 
 func CreateUser(c *gin.Context) {
+	ctx := c.Request.Context()
 	var user model.User
 	err := json.NewDecoder(c.Request.Body).Decode(&user)
 	if err != nil || user.Username == "" || user.Password == "" {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "无效的参数",
+			"message": i18n.Translate(c, "invalid_parameter"),
 		})
 		return
 	}
 	if err := common.Validate.Struct(&user); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "输入不合法 " + err.Error(),
+			"message": i18n.Translate(c, "invalid_input"),
 		})
 		return
 	}
@@ -592,7 +573,7 @@ func CreateUser(c *gin.Context) {
 		Password:    user.Password,
 		DisplayName: user.DisplayName,
 	}
-	if err := cleanUser.Insert(0); err != nil {
+	if err := cleanUser.Insert(ctx, 0); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -620,7 +601,7 @@ func ManageUser(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "无效的参数",
+			"message": i18n.Translate(c, "invalid_parameter"),
 		})
 		return
 	}
@@ -771,6 +752,7 @@ type topUpRequest struct {
 }
 
 func TopUp(c *gin.Context) {
+	ctx := c.Request.Context()
 	req := topUpRequest{}
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
@@ -781,7 +763,7 @@ func TopUp(c *gin.Context) {
 		return
 	}
 	id := c.GetInt("id")
-	quota, err := model.Redeem(req.Key, id)
+	quota, err := model.Redeem(ctx, req.Key, id)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -804,6 +786,7 @@ type adminTopUpRequest struct {
 }
 
 func AdminTopUp(c *gin.Context) {
+	ctx := c.Request.Context()
 	req := adminTopUpRequest{}
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
@@ -824,7 +807,7 @@ func AdminTopUp(c *gin.Context) {
 	if req.Remark == "" {
 		req.Remark = fmt.Sprintf("通过 API 充值 %s", common.LogQuota(int64(req.Quota)))
 	}
-	model.RecordTopupLog(req.UserId, req.Remark, req.Quota)
+	model.RecordTopupLog(ctx, req.UserId, req.Remark, req.Quota)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

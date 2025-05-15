@@ -5,9 +5,17 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+
 	"github.com/songquanpeng/one-api/common"
 	"github.com/songquanpeng/one-api/common/helper"
 	"github.com/songquanpeng/one-api/common/logger"
@@ -16,11 +24,6 @@ import (
 	"github.com/songquanpeng/one-api/relay/constant"
 	"github.com/songquanpeng/one-api/relay/meta"
 	"github.com/songquanpeng/one-api/relay/model"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
-	"time"
 )
 
 // https://console.xfyun.cn/services/cbm
@@ -28,11 +31,7 @@ import (
 
 func requestOpenAI2Xunfei(request model.GeneralOpenAIRequest, xunfeiAppId string, domain string) *ChatRequest {
 	messages := make([]Message, 0, len(request.Messages))
-	var lastToolCalls []model.Tool
 	for _, message := range request.Messages {
-		if message.ToolCalls != nil {
-			lastToolCalls = message.ToolCalls
-		}
 		messages = append(messages, Message{
 			Role:    message.Role,
 			Content: message.StringContent(),
@@ -45,9 +44,14 @@ func requestOpenAI2Xunfei(request model.GeneralOpenAIRequest, xunfeiAppId string
 	xunfeiRequest.Parameter.Chat.TopK = request.N
 	xunfeiRequest.Parameter.Chat.MaxTokens = request.MaxTokens
 	xunfeiRequest.Payload.Message.Text = messages
-	if len(lastToolCalls) != 0 {
-		for _, toolCall := range lastToolCalls {
-			xunfeiRequest.Payload.Functions.Text = append(xunfeiRequest.Payload.Functions.Text, toolCall.Function)
+
+	if strings.HasPrefix(domain, "generalv3") || domain == "4.0Ultra" {
+		functions := make([]model.Function, len(request.Tools))
+		for i, tool := range request.Tools {
+			functions[i] = tool.Function
+		}
+		xunfeiRequest.Payload.Functions = &Functions{
+			Text: functions,
 		}
 	}
 
@@ -203,7 +207,7 @@ func Handler(c *gin.Context, meta *meta.Meta, textRequest model.GeneralOpenAIReq
 		}
 	}
 	if len(xunfeiResponse.Payload.Choices.Text) == 0 {
-		return openai.ErrorWrapper(err, "xunfei_empty_response_detected", http.StatusInternalServerError), nil
+		return openai.ErrorWrapper(errors.New("xunfei empty response detected"), "xunfei_empty_response_detected", http.StatusInternalServerError), nil
 	}
 	xunfeiResponse.Payload.Choices.Text[0].Content = content
 
@@ -266,33 +270,4 @@ func xunfeiMakeRequest(textRequest model.GeneralOpenAIRequest, domain, authUrl, 
 	}()
 
 	return dataChan, stopChan, nil
-}
-
-func parseAPIVersionByModelName(modelName string) string {
-	parts := strings.Split(modelName, "-")
-	if len(parts) == 2 {
-		return parts[1]
-	}
-	return ""
-}
-
-// https://www.xfyun.cn/doc/spark/Web.html#_1-%E6%8E%A5%E5%8F%A3%E8%AF%B4%E6%98%8E
-func apiVersion2domain(apiVersion string) string {
-	switch apiVersion {
-	case "v1.1":
-		return "general"
-	case "v2.1":
-		return "generalv2"
-	case "v3.1":
-		return "generalv3"
-	case "v3.5":
-		return "generalv3.5"
-	}
-	return "general" + apiVersion
-}
-
-func getXunfeiAuthUrl(apiVersion string, apiKey string, apiSecret string) (string, string) {
-	domain := apiVersion2domain(apiVersion)
-	authUrl := buildXunfeiAuthUrl(fmt.Sprintf("wss://spark-api.xf-yun.com/%s/chat", apiVersion), apiKey, apiSecret)
-	return domain, authUrl
 }

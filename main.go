@@ -3,49 +3,46 @@ package main
 import (
 	"embed"
 	"fmt"
+	"os"
+	"strconv"
+
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	_ "github.com/joho/godotenv/autoload"
+
 	"github.com/songquanpeng/one-api/common"
 	"github.com/songquanpeng/one-api/common/client"
 	"github.com/songquanpeng/one-api/common/config"
+	"github.com/songquanpeng/one-api/common/i18n"
 	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/controller"
 	"github.com/songquanpeng/one-api/middleware"
 	"github.com/songquanpeng/one-api/model"
 	"github.com/songquanpeng/one-api/relay/adaptor/openai"
 	"github.com/songquanpeng/one-api/router"
-	"os"
-	"strconv"
 )
 
 //go:embed web/build/*
 var buildFS embed.FS
 
 func main() {
+	common.Init()
 	logger.SetupLogger()
-	logger.SysLog(fmt.Sprintf("One API %s started", common.Version))
-	if os.Getenv("GIN_MODE") != "debug" {
+	logger.SysLogf("One API %s started", common.Version)
+
+	if os.Getenv("GIN_MODE") != gin.DebugMode {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	if config.DebugEnabled {
 		logger.SysLog("running in debug mode")
 	}
-	var err error
+
 	// Initialize SQL Database
-	model.DB, err = model.InitDB("SQL_DSN")
-	if err != nil {
-		logger.FatalLog("failed to initialize database: " + err.Error())
-	}
-	if os.Getenv("LOG_SQL_DSN") != "" {
-		logger.SysLog("using secondary database for table logs")
-		model.LOG_DB, err = model.InitDB("LOG_SQL_DSN")
-		if err != nil {
-			logger.FatalLog("failed to initialize secondary database: " + err.Error())
-		}
-	} else {
-		model.LOG_DB = model.DB
-	}
+	model.InitDB()
+	model.InitLogDB()
+
+	var err error
 	err = model.CreateRootAccountIfNeed()
 	if err != nil {
 		logger.FatalLog("database init error: " + err.Error())
@@ -97,12 +94,18 @@ func main() {
 	openai.InitTokenEncoders()
 	client.Init()
 
+	// Initialize i18n
+	if err := i18n.Init(); err != nil {
+		logger.FatalLog("failed to initialize i18n: " + err.Error())
+	}
+
 	// Initialize HTTP server
 	server := gin.New()
 	server.Use(gin.Recovery())
 	// This will cause SSE not to work!!!
 	//server.Use(gzip.Gzip(gzip.DefaultCompression))
 	server.Use(middleware.RequestId())
+	server.Use(middleware.Language())
 	middleware.SetUpLogger(server)
 	// Initialize session store
 	store := cookie.NewStore([]byte(config.SessionSecret))
@@ -113,6 +116,7 @@ func main() {
 	if port == "" {
 		port = strconv.Itoa(*common.Port)
 	}
+	logger.SysLogf("server started on http://localhost:%s", port)
 	err = server.Run(":" + port)
 	if err != nil {
 		logger.FatalLog("failed to start HTTP server: " + err.Error())
